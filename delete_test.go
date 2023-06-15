@@ -10,6 +10,7 @@ func TestDeleteBuilderToSql(t *testing.T) {
 	b := Delete("").
 		Prefix("WITH prefix AS ?", 0).
 		From("a").
+		Using("u2").
 		JoinClause("CROSS JOIN j1").
 		Join("j2").
 		LeftJoin("j3").
@@ -27,7 +28,7 @@ func TestDeleteBuilderToSql(t *testing.T) {
 
 	expectedSql :=
 		"WITH prefix AS ? " +
-			"DELETE FROM a " +
+			"DELETE FROM a USING u2 " +
 			"CROSS JOIN j1 JOIN j2 LEFT JOIN j3 RIGHT JOIN j4 INNER JOIN j5 CROSS JOIN j6 " +
 			"WHERE b = ? ORDER BY c LIMIT 2 OFFSET 3 " +
 			"RETURNING ?"
@@ -86,4 +87,27 @@ func TestDeleteWithQuery(t *testing.T) {
 	b.Query()
 
 	assert.Equal(t, expectedSql, db.LastQuerySql)
+}
+
+func TestDeleteWithMultipleUsings(t *testing.T) {
+	b := Delete("a").
+		Using("t1", "t2").
+		Where(And{
+			Eq{"a.t1_c1": "t1.c1"},
+			Eq{"a.t2_c2": "t2.c2"},
+			Eq{"a.id": int64(16)},
+		}).
+		PlaceholderFormat(Dollar)
+
+	sql, args, err := b.ToSql()
+	assert.NoError(t, err)
+
+	expectedSql :=
+		"DELETE FROM a " +
+			"USING t1, t2 " +
+			"WHERE (a.t1_c1 = $1 AND a.t2_c2 = $2 AND a.id = $3)"
+	assert.Equal(t, expectedSql, sql)
+
+	expectedArgs := []interface{}{"t1.c1", "t2.c2", int64(16)}
+	assert.Equal(t, expectedArgs, args)
 }
